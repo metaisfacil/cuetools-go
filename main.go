@@ -91,15 +91,15 @@ func printLog(result cuetools.VerificationResult, showAccurateRip bool) {
 	}
 
 	// ── AccurateRip section ──────────────────────────────────────────────────
-	if showAccurateRip || len(result.ARResults) > 0 {
+	if showAccurateRip || result.ARFound || len(result.ARResults) > 0 {
 		arID := cuetools.ComputeAccurateRipID(result.TOC)
-		arFoundStr := "not found."
+		arFoundStr := "disk not present in database."
 		if result.ARFound {
 			arFoundStr = "found."
 		}
 		fmt.Printf("[AccurateRip ID: %s] %s\n", arID, arFoundStr)
 
-		if len(result.ARResults) > 0 {
+		if result.ARFound && len(result.ARResults) > 0 {
 			// Determine field width from max total.
 			var maxTotal uint32
 			for _, r := range result.ARResults {
