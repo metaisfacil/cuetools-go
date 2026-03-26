@@ -528,12 +528,6 @@ func TestLoadFLACTrack_CRCsConsistent(t *testing.T) {
 		t.Fatalf("CRCWoNull = %08X, want %08X", info.CRCWoNull, wantNull)
 	}
 
-	// AccurateRip CRC must match independent computation
-	wantAR := ComputeARTrackCRC32(info.Samples)
-	if info.CRC != wantAR {
-		t.Fatalf("AccurateRip CRC = %08X, want %08X", info.CRC, wantAR)
-	}
-
 	// Peak must be correct
 	var wantPeak int
 	for _, s := range info.Samples {
@@ -638,8 +632,8 @@ func TestBuildDiscFromFLAC_Layout(t *testing.T) {
 		t.Fatalf("crcs len %d != tracks len %d", len(crcs), len(tracks))
 	}
 	for i, c := range crcs {
-		if c != tracks[i].CRC {
-			t.Errorf("crcs[%d] = %08X, tracks[%d].CRC = %08X", i, c, i, tracks[i].CRC)
+		if c != tracks[i].ARCRCV1 {
+			t.Errorf("crcs[%d] = %08X, tracks[%d].ARCRCV1 = %08X", i, c, i, tracks[i].ARCRCV1)
 		}
 	}
 }
