@@ -14,17 +14,17 @@ import (
 
 // CDTrack is one entry in a TOC.
 type CDTrack struct {
-	Number  int
-	Start   int // sector (LBA)
-	Length  int // sector count
-	IsAudio bool
+	Number  int  `json:"number"`
+	Start   int  `json:"start"`  // sector (LBA)
+	Length  int  `json:"length"` // sector count
+	IsAudio bool `json:"is_audio"`
 }
 
 // CDImageLayout is a CUETools TOC layout.
 type CDImageLayout struct {
-	Tracks      []CDTrack
-	FirstAudio  int
-	AudioTracks int
+	Tracks      []CDTrack `json:"tracks"`
+	FirstAudio  int       `json:"first_audio"`
+	AudioTracks int       `json:"audio_tracks"`
 }
 
 // Length returns total disc length in sectors.
@@ -264,14 +264,14 @@ func ComputeAccurateRipID(layout CDImageLayout) string {
 
 // DBEntry is a processed database result.
 type DBEntry struct {
-	ID           int64
-	Confidence   int
-	CRC32        uint32
-	Npar         int
-	Stride       int
-	TrackCRCs    []uint32
-	HasParity    bool
-	HasParityURL string
-	Syndrome     []byte
-	TOC          string
+	ID           int64    `json:"id"`
+	Confidence   int      `json:"confidence"`
+	CRC32        uint32   `json:"crc32"`
+	Npar         int      `json:"npar"`
+	Stride       int      `json:"stride"`
+	TrackCRCs    []uint32 `json:"track_crcs"`
+	HasParity    bool     `json:"has_parity"`
+	HasParityURL string   `json:"has_parity_url"`
+	Syndrome     []byte   `json:"syndrome"`
+	TOC          string   `json:"toc"`
 }

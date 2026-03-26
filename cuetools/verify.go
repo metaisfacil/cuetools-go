@@ -290,7 +290,7 @@ type VerificationResult struct {
 	DiscCRCWoNull uint32 // CRC32 without null samples over all audio
 	DiscPeak      int    // max peak across all tracks (0–32767)
 	// AccurateRip
-	ARFound   bool           // true when disc ID is in the AccurateRip database
+	ARFound   bool // true when disc ID is in the AccurateRip database
 	ARResults []ARTrackResult
 }
 

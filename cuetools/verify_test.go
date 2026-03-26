@@ -1,6 +1,7 @@
 package cuetools
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"os"
@@ -652,6 +653,56 @@ func TestBuildDiscFromFLAC_Progress(t *testing.T) {
 	}
 	if len(calls) != 3 {
 		t.Fatalf("progress called %d times, want 3", len(calls))
+	}
+}
+
+func TestBuildVerificationReport(t *testing.T) {
+	// Use BuildDiscFromFLAC for quick local data without network.
+	dir := makeFakeFLACDir(t, []int{10, 20})
+	layout, _, tracks, err := BuildDiscFromFLAC(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := VerificationResult{
+		TOC:          layout,
+		Tracks:       tracks,
+		TotalEntries: 0,
+		DiscCRC32:    0x12345678,
+		DiscPeak:     234,
+		ARFound:      false,
+		ARResults:    nil,
+	}
+	report := BuildVerificationReport(result)
+	if report.TOC.Length() != layout.Length() {
+		t.Fatalf("expected TOC length %d got %d", layout.Length(), report.TOC.Length())
+	}
+	if report.Tracks[0].File != tracks[0].File {
+		t.Fatalf("expected track file %q got %q", tracks[0].File, report.Tracks[0].File)
+	}
+	if len(report.CTDBMatches) != 0 {
+		t.Fatalf("expected 0 CTDB matches, got %d", len(report.CTDBMatches))
+	}
+}
+
+func TestVerifyFLACFolderJSON_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping network test in -short mode")
+	}
+	dir := makeFakeFLACDir(t, []int{10, 20, 30})
+	data, err := VerifyFLACFolderJSON(dir, "http://db.cuetools.net", nil)
+	if err != nil {
+		// Skip on network failure rather than fail differently from existing tests.
+		if strings.Contains(err.Error(), "lookup failed") || strings.Contains(err.Error(), "connect") {
+			t.Skipf("CTDB/A.R. network not available: %v", err)
+		}
+		t.Fatal(err)
+	}
+	var report VerificationReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatalf("failed unmarshal result json: %v", err)
+	}
+	if report.TOC.AudioTracks != 3 {
+		t.Fatalf("expected 3 audio tracks, got %d", report.TOC.AudioTracks)
 	}
 }
 

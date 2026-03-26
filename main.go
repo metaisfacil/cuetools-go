@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -137,17 +138,33 @@ func printLog(result cuetools.VerificationResult, showAccurateRip bool) {
 func main() {
 	path := flag.String("path", "", "path to folder containing FLAC tracks")
 	ar := flag.Bool("accuraterip", false, "show AccurateRip disc ID")
+	jsonOut := flag.Bool("json", false, "output verification result as JSON")
 	flag.Parse()
 
 	if *path == "" {
-		fmt.Println("Usage: cuetools-go -path <flac-folder> [-accuraterip]")
+		fmt.Println("Usage: cuetools-go -path <flac-folder> [-accuraterip] [-json]")
 		os.Exit(1)
 	}
 
-	result, err := cuetools.VerifyFLACFolder(*path, "http://db.cuetools.net", trackProgress)
+	progressFunc := trackProgress
+	if *jsonOut {
+		progressFunc = nil
+	}
+	result, err := cuetools.VerifyFLACFolder(*path, "http://db.cuetools.net", progressFunc)
 	if err != nil {
 		fmt.Printf("Verification error: %v\n", err)
 		os.Exit(2)
+	}
+
+	if *jsonOut {
+		report := cuetools.BuildVerificationReport(result)
+		jsonData, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			fmt.Printf("JSON export error: %v\n", err)
+			os.Exit(2)
+		}
+		fmt.Println(string(jsonData))
+		return
 	}
 
 	printLog(result, *ar)

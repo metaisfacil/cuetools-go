@@ -39,13 +39,13 @@ type ARResponse struct {
 
 // ARTrackResult holds the per-track AccurateRip verification result.
 type ARTrackResult struct {
-	V1       uint32 // AccurateRip V1 CRC (lower-32 of weighted sum, with exclusions)
-	V2       uint32 // AccurateRip V2 CRC (lower+upper 32 of weighted sum)
-	Total    uint32 // sum of all confidence counts for this track position
-	ConfV1   uint32 // confidence matched via V1
-	ConfV2   uint32 // confidence matched via V2
-	Accurate bool
-	Silent   bool
+	V1       uint32 `json:"v1"`      // AccurateRip V1 CRC (lower-32 of weighted sum, with exclusions)
+	V2       uint32 `json:"v2"`      // AccurateRip V2 CRC (lower+upper 32 of weighted sum)
+	Total    uint32 `json:"total"`   // sum of all confidence counts for this track position
+	ConfV1   uint32 `json:"conf_v1"` // confidence matched via V1
+	ConfV2   uint32 `json:"conf_v2"` // confidence matched via V2
+	Accurate bool   `json:"accurate"`
+	Silent   bool   `json:"silent"`
 }
 
 // ComputeARTrackCRCs computes AccurateRip V1 and V2 CRCs for one track's packed
