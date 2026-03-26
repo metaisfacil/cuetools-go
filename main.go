@@ -54,10 +54,20 @@ func ctdbStatus(matched, total int) string {
 	}
 }
 
+func arStatus(r cuetools.ARTrackResult) string {
+	if r.Accurate {
+		return "Accurately ripped"
+	}
+	if r.Silent {
+		return "Silent track"
+	}
+	return "No match"
+}
+
 func printLog(result cuetools.VerificationResult, showAccurateRip bool) {
 	// ── Header ──────────────────────────────────────────────────────────────
 	now := time.Now()
-	fmt.Printf("[CUETools-Go log; Date: %s; Version: 0.0.1]\n", now.Format("1/2/2006 3:04:05 PM"))
+	fmt.Printf("[CUETools log; Date: %s; Version: 0.0.1]\n", now.Format("1/2/2006 3:04:05 PM"))
 
 	// ── CTDB section ────────────────────────────────────────────────────────
 	tocID := cuetools.ComputeTOCID(result.TOC)
@@ -80,10 +90,37 @@ func printLog(result cuetools.VerificationResult, showAccurateRip bool) {
 		fmt.Printf("%3d   | (%d/%d) %s\n", i+1, matched, total, ctdbStatus(matched, total))
 	}
 
-	// ── AccurateRip ID (computed locally, no lookup) ─────────────────────────
-	if showAccurateRip {
+	// ── AccurateRip section ──────────────────────────────────────────────────
+	if showAccurateRip || len(result.ARResults) > 0 {
 		arID := cuetools.ComputeAccurateRipID(result.TOC)
-		fmt.Printf("[AccurateRip ID: %s] (no lookup)\n", arID)
+		arFoundStr := "not found."
+		if result.ARFound {
+			arFoundStr = "found."
+		}
+		fmt.Printf("[AccurateRip ID: %s] %s\n", arID, arFoundStr)
+
+		if len(result.ARResults) > 0 {
+			// Determine field width from max total.
+			var maxTotal uint32
+			for _, r := range result.ARResults {
+				if r.Total > maxTotal {
+					maxTotal = r.Total
+				}
+			}
+			w := 1
+			if maxTotal >= 100 {
+				w = 3
+			} else if maxTotal >= 10 {
+				w = 2
+			}
+			fmt.Println("Track   [  CRC   |   V2   ] Status")
+			for i, r := range result.ARResults {
+				fmt.Printf(" %02d     [%08x|%08x] (%0*d+%0*d/%0*d) %s\n",
+					i+1, r.V1, r.V2,
+					w, r.ConfV1, w, r.ConfV2, w, r.Total,
+					arStatus(r))
+			}
+		}
 	}
 
 	// ── Track CRC table ──────────────────────────────────────────────────────

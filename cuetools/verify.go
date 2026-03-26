@@ -269,7 +269,8 @@ type TrackInfo struct {
 	BitsPerSample int
 	FrameSamples  int // samples per channel
 	Sectors       int
-	CRC           uint32 // AccurateRip CRC (V2)
+	ARCRCV1       uint32 // AccurateRip V1 CRC (with edge exclusions)
+	ARCRCV2       uint32 // AccurateRip V2 CRC (with edge exclusions)
 	TrackCRC32    uint32 // standard CRC32 of audio samples
 	CRCWoNull     uint32 // CRC32 skipping zero-valued 16-bit words (EAC style)
 	Peak          int    // max absolute 16-bit sample value, range 0–32767
@@ -277,7 +278,7 @@ type TrackInfo struct {
 	IsSilent      bool
 }
 
-// VerificationResult holds CTDB and track results.
+// VerificationResult holds CTDB and AccurateRip track results.
 type VerificationResult struct {
 	TOC           CDImageLayout
 	Tracks        []TrackInfo
@@ -288,6 +289,9 @@ type VerificationResult struct {
 	DiscCRC32     uint32 // standard CRC32 over all audio samples
 	DiscCRCWoNull uint32 // CRC32 without null samples over all audio
 	DiscPeak      int    // max peak across all tracks (0–32767)
+	// AccurateRip
+	ARFound   bool           // true when disc ID is in the AccurateRip database
+	ARResults []ARTrackResult
 }
 
 // DBMatch indicates how a CTDB entry matches track CRCs.
@@ -348,7 +352,6 @@ func loadFLACTrack(path string) (TrackInfo, error) {
 		info.Samples = make([]uint32, 0, stream.Info.NSamples)
 	}
 
-	arcrc := &ARCRC32{}
 	t := crc32.IEEETable
 	var crcRaw uint32 = 0xffffffff  // running state for TrackCRC32
 	var crcNull uint32 = 0xffffffff // running state for CRCWoNull
@@ -378,8 +381,6 @@ func loadFLACTrack(path string) (TrackInfo, error) {
 			l16 := toInt16(left, info.BitsPerSample)
 			r16 := toInt16(right, info.BitsPerSample)
 			packed := uint32(uint16(l16)) | uint32(uint16(r16))<<16
-
-			arcrc.AddSample(packed)
 
 			// TrackCRC32 inline (avoids a second pass)
 			crcRaw = t[byte(crcRaw)^byte(packed)] ^ (crcRaw >> 8)
@@ -425,7 +426,6 @@ func loadFLACTrack(path string) (TrackInfo, error) {
 	// CD sector = 1/75 second
 	info.Sectors = int((int64(totalFrames)*75 + int64(info.SampleRate/2)) / int64(info.SampleRate))
 	info.Sectors = max(info.Sectors, 1)
-	info.CRC = arcrc.Sum()
 	info.TrackCRC32 = crcRaw ^ 0xffffffff
 	info.CRCWoNull = crcNull ^ 0xffffffff
 	info.Peak = peak
@@ -562,7 +562,7 @@ func BuildDiscFromFLAC(dir string, progress ProgressFunc) (CDImageLayout, []uint
 	}
 
 	layout := CDImageLayout{FirstAudio: 1, AudioTracks: len(files)}
-	trackCRCs := make([]uint32, len(tracks))
+	arCRCs := make([]uint32, len(tracks))
 	start := 150
 	for i, t := range tracks {
 		if t.Channels < 1 || t.Channels > 2 {
@@ -570,9 +570,12 @@ func BuildDiscFromFLAC(dir string, progress ProgressFunc) (CDImageLayout, []uint
 		}
 		layout.Tracks = append(layout.Tracks, CDTrack{Number: i + 1, Start: start, Length: t.Sectors, IsAudio: true})
 		start += t.Sectors
-		trackCRCs[i] = t.CRC
+		v1, v2 := ComputeARTrackCRCs(t.Samples, i == 0, i == len(tracks)-1)
+		arCRCs[i] = v1
+		tracks[i].ARCRCV1 = v1
+		tracks[i].ARCRCV2 = v2
 	}
-	return layout, trackCRCs, tracks, nil
+	return layout, arCRCs, tracks, nil
 }
 
 // VerifyFLACFolder processes all FLACs and checks CTDB entries.
@@ -613,6 +616,16 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 		ctdbCh <- ctdbResult{resp, err}
 	}()
 
+	type arResult struct {
+		resp *ARResponse
+		err  error
+	}
+	arCh := make(chan arResult, 1)
+	go func() {
+		resp, err := FetchARDatabase(layout, client.HTTPClient)
+		arCh <- arResult{resp, err}
+	}()
+
 	// Load all tracks in parallel.
 	tracks, err := loadAllTracks(files, progress)
 	if err != nil {
@@ -621,7 +634,7 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 
 	// Rebuild layout from actual decoded sector counts (should match quickBuildTOC).
 	layout = CDImageLayout{FirstAudio: 1, AudioTracks: len(files)}
-	trackCRCs := make([]uint32, len(tracks))
+	arPairs := make([]ARTrackCRCPair, len(tracks))
 	start := 150
 	for i, t := range tracks {
 		if t.Channels < 1 || t.Channels > 2 {
@@ -629,7 +642,10 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 		}
 		layout.Tracks = append(layout.Tracks, CDTrack{Number: i + 1, Start: start, Length: t.Sectors, IsAudio: true})
 		start += t.Sectors
-		trackCRCs[i] = t.CRC
+		v1, v2 := ComputeARTrackCRCs(t.Samples, i == 0, i == len(tracks)-1)
+		arPairs[i] = ARTrackCRCPair{V1: v1, V2: v2}
+		tracks[i].ARCRCV1 = v1
+		tracks[i].ARCRCV2 = v2
 	}
 
 	// Collect CTDB result (may already be ready if audio loading took longer).
@@ -639,7 +655,18 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 	}
 	resp := ctdbRes.resp
 
+	// Collect AccurateRip result.
+	arRes := <-arCh
+	// Non-fatal: AR lookup failure is tolerated (network may be down).
+
 	result := VerificationResult{TOC: layout, Tracks: tracks}
+	if arRes.resp != nil {
+		result.ARFound = len(arRes.resp.Disks) > 0
+		result.ARResults = VerifyAR(arPairs, layout, arRes.resp)
+	} else {
+		result.ARResults = VerifyAR(arPairs, layout, nil)
+	}
+
 	result.TotalEntries = 0
 	for _, entry := range resp.Entries {
 		result.TotalEntries += entry.Confidence
@@ -667,7 +694,7 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 	positions := collectNeededPositions(allSamples, layout, suffixSectors)
 	prefixCRCs := computeRawCRCPrefixes(allSamples, positions)
 
-	verifyTotal := len(resp.Entries) * len(trackCRCs)
+	verifyTotal := len(resp.Entries) * len(tracks)
 	verifyDone := 0
 
 	for _, entry := range resp.Entries {
@@ -676,10 +703,10 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 			continue
 		}
 
-		trackMatch := make([]bool, len(trackCRCs))
+		trackMatch := make([]bool, len(tracks))
 		all := true
-		if len(dbEntry.TrackCRCs) == len(trackCRCs) {
-			for i := range trackCRCs {
+		if len(dbEntry.TrackCRCs) == len(tracks) {
+			for i := range tracks {
 				trackMatch[i] = false
 				verifyDone++
 				notify(verifyDone, verifyTotal, "Verifying tracks")
