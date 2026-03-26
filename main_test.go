@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/cuetools-go/cuetools"
+	"github.com/metaisfacil/cuetools-go/cuetools"
 )
 
 func TestPrintLog_AccurateRipNotFound(t *testing.T) {

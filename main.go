@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/cuetools-go/cuetools"
+	"github.com/metaisfacil/cuetools-go/cuetools"
 )
 
 func trackProgress(done, total int, message string) {
