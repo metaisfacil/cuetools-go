@@ -1,0 +1,41 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Output of the go coverage tool, specifically when used with liteide
+*.coverprofile
+
+# Dependency directories (remove the comment if you use vendoring)
+/vendor/
+
+# Go workspace file
+go.work
+
+# IDE/editor directories and files
+.vscode/
+.idea/
+*.iml
+*.swp
+*~
+.DS_Store
+
+# Logs and temp files
+*.log
+*.tmp
+
+# MacOS
+.AppleDouble
+.LSOverride
+
+# Windows thumbnail cache files
+Thumbs.db
+
+# JetBrains
+out/
+
+# Visual Studio Code
+.history/
