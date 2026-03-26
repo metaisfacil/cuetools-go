@@ -1,4 +1,4 @@
-module github.com/example/cuetools-go
+module github.com/metaisfacil/cuetools-go
 
 go 1.23.2
 
