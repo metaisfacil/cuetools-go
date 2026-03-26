@@ -1,4 +1,4 @@
-package cuetools
+package accuraterip
 
 import (
 	"encoding/binary"
@@ -77,14 +77,7 @@ func ComputeARTrackCRCs(samples []uint32, isFirst, isLast bool) (v1, v2 uint32) 
 
 // FetchARDatabase downloads and parses the AccurateRip binary database for layout.
 // Returns nil response (no error) when the disc is not in the database (HTTP 404).
-func FetchARDatabase(layout CDImageLayout, client *http.Client) (*ARResponse, error) {
-	id1, id2, cddb := calcARDiscIDs(layout)
-	nTracks := 0
-	for _, t := range layout.Tracks {
-		if t.IsAudio {
-			nTracks++
-		}
-	}
+func FetchARDatabase(id1, id2, cddb uint32, nTracks int, client *http.Client) (*ARResponse, error) {
 	url := fmt.Sprintf(
 		"http://www.accuraterip.com/accuraterip/%x/%x/%x/dBAR-%03d-%08x-%08x-%08x.bin",
 		id1&0xF, (id1>>4)&0xF, (id1>>8)&0xF,
@@ -139,8 +132,8 @@ func parseARResponse(r io.Reader) (*ARResponse, error) {
 }
 
 // VerifyAR matches per-track V1/V2 CRCs against an AccurateRip database response.
-// toc is used to map 0-indexed track position to the disc's FirstAudio offset.
-func VerifyAR(trackCRCs []ARTrackCRCPair, toc CDImageLayout, response *ARResponse) []ARTrackResult {
+// firstAudio is the 1-based first audio track index in the disk.Tracks slice.
+func VerifyAR(trackCRCs []ARTrackCRCPair, firstAudio int, response *ARResponse) []ARTrackResult {
 	results := make([]ARTrackResult, len(trackCRCs))
 	if response == nil {
 		for i, p := range trackCRCs {
@@ -153,7 +146,7 @@ func VerifyAR(trackCRCs []ARTrackCRCPair, toc CDImageLayout, response *ARRespons
 		res := &results[i]
 		res.V1 = p.V1
 		res.V2 = p.V2
-		trno := i + toc.FirstAudio - 1 // 0-indexed position in the disk.Tracks slice
+		trno := i + firstAudio - 1 // 0-indexed position in the disk.Tracks slice
 		for _, disk := range response.Disks {
 			if trno >= len(disk.Tracks) {
 				continue

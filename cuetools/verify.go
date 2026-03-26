@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/metaisfacil/cuetools-go/accuraterip"
 	"github.com/mewkiz/flac"
 )
 
@@ -290,8 +291,22 @@ type VerificationResult struct {
 	DiscCRCWoNull uint32 // CRC32 without null samples over all audio
 	DiscPeak      int    // max peak across all tracks (0–32767)
 	// AccurateRip
-	ARFound   bool // true when disc ID is in the AccurateRip database
-	ARResults []ARTrackResult
+	ARFound   bool
+	ARResults []accuraterip.ARTrackResult
+}
+
+// ARTrackResult is forwarded from accuraterip package.
+type ARTrackResult = accuraterip.ARTrackResult
+
+// ARTrackCRCPair is forwarded from accuraterip package.
+type ARTrackCRCPair = accuraterip.ARTrackCRCPair
+
+// ARResponse is forwarded from accuraterip package.
+type ARResponse = accuraterip.ARResponse
+
+// ComputeARTrackCRC32 is forwarded from accuraterip package.
+func ComputeARTrackCRC32(samples []uint32) uint32 {
+	return accuraterip.ComputeARTrackCRC32(samples)
 }
 
 // DBMatch indicates how a CTDB entry matches track CRCs.
@@ -570,7 +585,7 @@ func BuildDiscFromFLAC(dir string, progress ProgressFunc) (CDImageLayout, []uint
 		}
 		layout.Tracks = append(layout.Tracks, CDTrack{Number: i + 1, Start: start, Length: t.Sectors, IsAudio: true})
 		start += t.Sectors
-		v1, v2 := ComputeARTrackCRCs(t.Samples, i == 0, i == len(tracks)-1)
+		v1, v2 := accuraterip.ComputeARTrackCRCs(t.Samples, i == 0, i == len(tracks)-1)
 		arCRCs[i] = v1
 		tracks[i].ARCRCV1 = v1
 		tracks[i].ARCRCV2 = v2
@@ -617,12 +632,13 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 	}()
 
 	type arResult struct {
-		resp *ARResponse
+		resp *accuraterip.ARResponse
 		err  error
 	}
 	arCh := make(chan arResult, 1)
 	go func() {
-		resp, err := FetchARDatabase(layout, client.HTTPClient)
+		id1, id2, cddb := calcARDiscIDs(layout)
+		resp, err := accuraterip.FetchARDatabase(id1, id2, cddb, len(layout.Tracks), client.HTTPClient)
 		arCh <- arResult{resp, err}
 	}()
 
@@ -634,7 +650,7 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 
 	// Rebuild layout from actual decoded sector counts (should match quickBuildTOC).
 	layout = CDImageLayout{FirstAudio: 1, AudioTracks: len(files)}
-	arPairs := make([]ARTrackCRCPair, len(tracks))
+	arPairs := make([]accuraterip.ARTrackCRCPair, len(tracks))
 	start := 150
 	for i, t := range tracks {
 		if t.Channels < 1 || t.Channels > 2 {
@@ -642,8 +658,8 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 		}
 		layout.Tracks = append(layout.Tracks, CDTrack{Number: i + 1, Start: start, Length: t.Sectors, IsAudio: true})
 		start += t.Sectors
-		v1, v2 := ComputeARTrackCRCs(t.Samples, i == 0, i == len(tracks)-1)
-		arPairs[i] = ARTrackCRCPair{V1: v1, V2: v2}
+		v1, v2 := accuraterip.ComputeARTrackCRCs(t.Samples, i == 0, i == len(tracks)-1)
+		arPairs[i] = accuraterip.ARTrackCRCPair{V1: v1, V2: v2}
 		tracks[i].ARCRCV1 = v1
 		tracks[i].ARCRCV2 = v2
 	}
@@ -662,9 +678,9 @@ func VerifyFLACFolder(dir, ctdbServer string, progress ProgressFunc) (Verificati
 	result := VerificationResult{TOC: layout, Tracks: tracks}
 	if arRes.resp != nil {
 		result.ARFound = len(arRes.resp.Disks) > 0
-		result.ARResults = VerifyAR(arPairs, layout, arRes.resp)
+		result.ARResults = accuraterip.VerifyAR(arPairs, layout.FirstAudio, arRes.resp)
 	} else {
-		result.ARResults = VerifyAR(arPairs, layout, nil)
+		result.ARResults = accuraterip.VerifyAR(arPairs, layout.FirstAudio, nil)
 	}
 
 	result.TotalEntries = 0

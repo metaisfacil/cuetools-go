@@ -2,6 +2,8 @@ package cuetools
 
 import (
 	"encoding/json"
+
+	"github.com/metaisfacil/cuetools-go/accuraterip"
 )
 
 // TrackReport is a JSON-friendly track summary (omits raw samples).
@@ -32,18 +34,18 @@ type CTDBMatchReport struct {
 
 // VerificationReport is the library-friendly response structure for JSON output.
 type VerificationReport struct {
-	TOC           CDImageLayout     `json:"toc"`
-	TOCID         string            `json:"toc_id"`
-	Tracks        []TrackReport     `json:"tracks"`
-	CTDBMatches   []CTDBMatchReport `json:"ctdb_matches"`
-	MatchedEntry  *DBEntry          `json:"matched_entry,omitempty"`
-	TotalEntries  int               `json:"total_entries"`
-	DiscCRC32     uint32            `json:"disc_crc32"`
-	DiscCRCWoNull uint32            `json:"disc_crc32_without_null"`
-	DiscPeak      int               `json:"disc_peak"`
-	ARFound       bool              `json:"accuraterip_found"`
-	ARResults     []ARTrackResult   `json:"accuraterip_track_results"`
-	AccurateRipID string            `json:"accuraterip_id"`
+	TOC           CDImageLayout               `json:"toc"`
+	TOCID         string                      `json:"toc_id"`
+	Tracks        []TrackReport               `json:"tracks"`
+	CTDBMatches   []CTDBMatchReport           `json:"ctdb_matches"`
+	MatchedEntry  *DBEntry                    `json:"matched_entry,omitempty"`
+	TotalEntries  int                         `json:"total_entries"`
+	DiscCRC32     uint32                      `json:"disc_crc32"`
+	DiscCRCWoNull uint32                      `json:"disc_crc32_without_null"`
+	DiscPeak      int                         `json:"disc_peak"`
+	ARFound       bool                        `json:"accuraterip_found"`
+	ARResults     []accuraterip.ARTrackResult `json:"accuraterip_track_results"`
+	AccurateRipID string                      `json:"accuraterip_id"`
 }
 
 // BuildVerificationReport converts a raw VerificationResult to a report.

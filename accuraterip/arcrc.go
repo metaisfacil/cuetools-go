@@ -1,4 +1,4 @@
-package cuetools
+package accuraterip
 
 // ComputeARTrackCRC32 computes the AccurateRip V2 CRC for a track's stereo-pair samples.
 func ComputeARTrackCRC32(samples []uint32) uint32 {
